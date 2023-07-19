@@ -26,7 +26,7 @@ import multiprocessing as mp
 import pyqtgraph.opengl as gl
 import matplotlib.cm as cm
 import matplotlib as mpl
-from windows.common import AL_viewer, get_data_list, load_points, get_colors, create_boxes
+from windows.common import AL_viewer, get_data_list, load_points, get_colors, create_boxes, parse_ann_info
 
 
 def parse_args():
@@ -80,15 +80,16 @@ class ALWindow(QMainWindow):
         self.lastDir = None
         self.current_mesh = None
         self.success = cfg.success
+        self.boxes = {}
         self.index = -1
         self.row_height = 20
-
-        self.viewer = AL_viewer()
-        self.grid = gl.GLGridItem()
 
         self.centerWidget = QWidget()
         self.setCentralWidget(self.centerWidget)
         self.layout = QGridLayout()
+
+        self.viewer = AL_viewer()
+        self.grid = gl.GLGridItem()
 
         # Buttons
         self.reset_btn = QPushButton("reset")
@@ -112,8 +113,6 @@ class ALWindow(QMainWindow):
 
         self.num_info = QLabel("")
         self.log_info = QLabel("")
-
-        
 
         self.init_window()
 
@@ -173,7 +172,7 @@ class ALWindow(QMainWindow):
 
 
     def reset(self) -> None:
-        pass
+        self.reset_viewer()
 
     def reset_viewer(self) -> None:
 
@@ -230,22 +229,20 @@ class ALWindow(QMainWindow):
         # boxes #
         #########
         file_dict = self.data_list[self.index]
-        annotations = file_dict['instances']
-        box_info = create_boxes(annotations=annotations, COLORS=self.cfg.COLORS)
+        annotations = parse_ann_info(file_dict)
+        bboxes_3d = annotations['gt_bboxes_3d']
+        box_info = create_boxes(bboxes_3d=bboxes_3d, COLORS=self.cfg.COLORS)
 
-        box_info = {
-        'boxes' : boxes,
-        'box_items' : box_items,
-        'l1_items' : l1_items,
-        'l2_items' : l2_items
-    }
-        boxes = box_info['boxes']
-        box_items = box_info['boxes']
+        self.boxes = box_info['boxes']
+        box_items = box_info['box_items']
         l1_items = box_info['l1_items']
         l2_items = box_info['l2_items']
 
-
-
+        for box_item, l1_item, l2_item in zip(box_items, l1_items, l2_items):
+            self.viewer.addItem(box_item)
+            self.viewer.addItem(l1_item)
+            self.viewer.addItem(l2_item)
+        
 
 
     def show_pointcloud(self, filename: Union[dict, str]) -> None:
@@ -254,6 +251,7 @@ class ALWindow(QMainWindow):
     def show_mmdet_dict(self, file_dict: dict) -> None:
         assert self.dataset_path is not None
         assert self.data_prefix is not None
+
 
         self.reset_viewer()
         if file_dict.get('instances', None) is not None:
@@ -341,7 +339,7 @@ class ALWindow(QMainWindow):
         self.d_type = np.float32
         self.intensity_multiplier = 255
         self.color_dict[6] = 'not available'
-        self.data_prefix=dict(pts='training/velodyne_reduced'),
+        self.data_prefix=dict(pts='training/velodyne_reduced')
 
     def set_nuscenes(self) -> None:
         self.dataset = 'nuScenes'

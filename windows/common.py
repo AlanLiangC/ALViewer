@@ -170,15 +170,15 @@ def get_colors(color_dict: dict) -> dict:
     return color_dict
 
 
-def create_boxes(annotations, COLORS):
+def create_boxes(bboxes_3d, COLORS):
     boxes = {}
     box_items = []
     l1_items = []
     l2_items = []
     # create annotation boxes
-    for annotation in annotations:
+    for annotation in bboxes_3d:
 
-        x, y, z, w, l, h, rotation, category = annotation
+        z, x, y, w, l, h, rotation, category = annotation
 
         rotation = np.rad2deg(rotation) + 90
 
@@ -233,3 +233,45 @@ def create_boxes(annotations, COLORS):
     }
 
     return box_info
+
+def parse_ann_info(info: dict):
+
+        name_mapping = {
+            'bbox_label_3d': 'gt_labels_3d',
+            'bbox_label': 'gt_bboxes_labels',
+            'bbox': 'gt_bboxes',
+            'bbox_3d': 'gt_bboxes_3d',
+            'depth': 'depths',
+            'center_2d': 'centers_2d',
+            'attr_label': 'attr_labels',
+            'velocity': 'velocities',
+        }
+        instances = info['instances']
+        # empty gt
+        if len(instances) == 0:
+            return None
+        else:
+            keys = list(instances[0].keys())
+            ann_info = dict()
+            for ann_name in keys:
+                temp_anns = [item[ann_name] for item in instances]
+                # map the original dataset label to training label
+
+                if ann_name in name_mapping:
+                    mapped_ann_name = name_mapping[ann_name]
+                else:
+                    mapped_ann_name = ann_name
+
+                if 'label' in ann_name:
+                    temp_anns = np.array(temp_anns).astype(np.int64) + 1
+                elif ann_name in name_mapping:
+                    temp_anns = np.array(temp_anns).astype(np.float32)
+                else:
+                    temp_anns = np.array(temp_anns)
+
+                ann_info[mapped_ann_name] = temp_anns
+            ann_info['instances'] = info['instances']
+
+        ann_info['gt_bboxes_3d'] = np.hstack([ann_info['gt_bboxes_3d'], ann_info['gt_bboxes_labels'].reshape(-1,1)])
+
+        return ann_info
