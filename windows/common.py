@@ -12,6 +12,9 @@ from PyQt5.QtGui import *
 import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtGui
 
+from mmdet3d.structures import Box3DMode
+
+
 
 class AL_viewer(gl.GLViewWidget):
     
@@ -169,31 +172,44 @@ def get_colors(color_dict: dict) -> dict:
 
     return color_dict
 
+def limit_period(val: np.ndarray,
+                 offset: float = 0.5,
+                 period: float = np.pi):
 
-def create_boxes(bboxes_3d, COLORS):
+    limited_val = val - (val / period + offset) * period
+    return limited_val
+
+
+def create_boxes(bboxes_3d, COLORS, dataset):
     boxes = {}
     box_items = []
     l1_items = []
     l2_items = []
+
+    if dataset == "KITTI":
+        bboxes_3d = Box3DMode.convert(bboxes_3d, Box3DMode.CAM,
+                                                    Box3DMode.LIDAR)
+        bboxes_3d[:,2] += bboxes_3d[:,5] / 2
+    elif dataset == 'nuScenes':
+        pass
+    else:
+        raise TypeError('Not set dataset')
+
     # create annotation boxes
     for annotation in bboxes_3d:
 
-        z, x, y, w, l, h, rotation, category = annotation
-
+        x, y, z, w, l, h, rotation, category = annotation
         rotation = np.rad2deg(rotation) + 90
-
         try:
             color = COLORS[int(category) - 1]
         except IndexError:
             color = (255, 255, 255, 255)
 
         box = gl.GLBoxItem(QtGui.QVector3D(1, 1, 1), color=color)
-
         box.setSize(l, w, h)
         box.translate(-l / 2, -w / 2, -h / 2)
         box.rotate(angle=rotation, x=0, y=0, z=1)
         box.translate(x, y, z)
-
         box_items.append(box)
 
         #################
