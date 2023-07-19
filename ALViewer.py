@@ -225,13 +225,24 @@ class ALWindow(QMainWindow):
     def show_sem(self):
         pass
 
-    def show_det(self, file_dict: dict):
+    def show_det(self):
         #########
         # boxes #
         #########
+        file_dict = self.data_list[self.index]
         annotations = file_dict['instances']
         box_info = create_boxes(annotations=annotations, COLORS=self.cfg.COLORS)
 
+        box_info = {
+        'boxes' : boxes,
+        'box_items' : box_items,
+        'l1_items' : l1_items,
+        'l2_items' : l2_items
+    }
+        boxes = box_info['boxes']
+        box_items = box_info['boxes']
+        l1_items = box_info['l1_items']
+        l2_items = box_info['l2_items']
 
 
 
@@ -243,7 +254,10 @@ class ALWindow(QMainWindow):
     def show_mmdet_dict(self, file_dict: dict) -> None:
         assert self.dataset_path is not None
         assert self.data_prefix is not None
+
         self.reset_viewer()
+        if file_dict.get('instances', None) is not None:
+            self.show_det_btn.setEnabled(True)
         lidar_points_path = file_dict['lidar_points']['lidar_path']
         lidar_points_path = os.path.join(self.dataset_path,self.data_prefix['pts'],lidar_points_path)
 

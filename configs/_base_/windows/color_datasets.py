@@ -2,9 +2,14 @@
 COLORS = [(  0, 255,   0, 255),  # cars in green
           (255,   0,   0, 255),  # pedestrian in red
           (255, 255,   0, 255),  # cyclists in yellow
-          (  0, 255,   0, 255),  
-          (255,   0,   0, 255), 
-          (255, 255,   0, 255), 
+          (255, 127,  80, 255),  # Coral
+          (233, 150,  70, 255),  # Darksalmon
+          (220,  20,  60, 255),  # Crimson
+          (255,  61,  99, 255),  # Red
+          (0,     0, 230, 255),  # Blue
+          (47,   79,  79, 255),  # Darkslategrey
+         (112,  128, 144, 255),  # Slategrey
+        ]
 
 color_dict = {0: 'x',
               1: 'y',
