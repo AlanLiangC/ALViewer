@@ -62,7 +62,7 @@ class ALWindow(QMainWindow):
         self.color_dict = cfg.color_dict
         self.grid_dimensions = cfg.grid_dimensions
 
-        self.dataset = cfg.dataset
+        self.dataset = None
         self.dataset_path = None
         self.data_prefix = None
         self.min_value = cfg.min_value
@@ -81,6 +81,7 @@ class ALWindow(QMainWindow):
         self.current_mesh = None
         self.success = cfg.success
         self.boxes = {}
+        self.img_dict = {}
         self.index = -1
         self.row_height = 20
         self.always_show_det_or_sem = False
@@ -186,6 +187,13 @@ class ALWindow(QMainWindow):
 
 
     def reset(self) -> None:
+        self.show_det_btn.setEnabled(False)
+        self.show_img_btn.setEnabled(False)
+        self.show_sem_btn.setEnabled(False)
+
+        self.file_name_label.setText("")
+        self.num_info.setText("")
+        self.log_info.setText("")
         self.reset_viewer()
 
     def reset_viewer(self) -> None:
@@ -265,7 +273,16 @@ class ALWindow(QMainWindow):
             self.viewer.addItem(l2_item)
 
     def show_img(self):
-        self.image_window.show()
+        self.update_img_dict()
+        if self.dataset == 'KITTI':
+            self.image_window.show_kitti_image(self.img_dict)
+            self.image_window.show()
+        elif self.dataset == 'nuScenes':
+            self.image_window.show_nuscenes_image(self.img_dict)
+            self.image_window.show()
+        else:
+            raise TypeError('Please check if at least one dataset was selected!')
+
         
     def show_pointcloud(self, filename: Union[dict, str]) -> None:
         pass
@@ -369,8 +386,9 @@ class ALWindow(QMainWindow):
         self.d_type = np.float32
         self.intensity_multiplier = 255
         self.color_dict[6] = 'not available'
-        self.data_prefix=dict(pts='training/velodyne_reduced')
-
+        self.data_prefix=dict(pts='training/velodyne_reduced',
+                              img='training/image_2')
+        
     def set_nuscenes(self) -> None:
         self.dataset = 'nuScenes'
         self.min_value = 0
@@ -380,7 +398,31 @@ class ALWindow(QMainWindow):
         self.extension = 'bin'
         self.intensity_multiplier = 1
         self.color_dict[6] = 'channel'
-        self.data_prefix = dict(pts='samples/LIDAR_TOP', img='', sweeps='sweeps/LIDAR_TOP')
+        self.data_prefix = dict(
+                            pts='samples/LIDAR_TOP',
+                            CAM_FRONT='samples/CAM_FRONT',
+                            CAM_FRONT_LEFT='samples/CAM_FRONT_LEFT',
+                            CAM_FRONT_RIGHT='samples/CAM_FRONT_RIGHT',
+                            CAM_BACK='samples/CAM_BACK',
+                            CAM_BACK_RIGHT='samples/CAM_BACK_RIGHT',
+                            CAM_BACK_LEFT='samples/CAM_BACK_LEFT',
+                            sweeps='sweeps/LIDAR_TOP')
+    
+    def update_img_dict(self):
+
+        assert self.dataset is not None
+
+        try:
+            self.img_dict.update(
+                {
+                    'dataset': self.dataset,
+                    'dataset_path': self.dataset_path,
+                    'data_prefix': self.data_prefix,
+                    'data_info': self.data_list[self.index]
+                }
+            )
+        except:
+            raise TypeError('Loss some arr of self.')
 
     def load_kitti(self) -> None:
         self.dataset_path = Path(self.cfg.KITTI)

@@ -20,7 +20,6 @@ color_dict = {0: 'x',
               6: 'channel'}
 
 grid_dimensions = 20
-dataset = None
 success = False # ?
 min_value = 0
 max_value = 63
