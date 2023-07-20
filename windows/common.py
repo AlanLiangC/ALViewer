@@ -143,7 +143,7 @@ def get_colors(color_dict: dict) -> dict:
         min_value = 0
         max_value = 2 * np.pi
 
-    else:  # self.color_feature == 6:
+    elif color_feature == 6:
 
         try:
             feature = pc[:, 4]
@@ -151,6 +151,24 @@ def get_colors(color_dict: dict) -> dict:
 
         except IndexError:
             feature = pc[:, 3]
+
+    elif color_feature == 7: # semantic mode 
+
+        assert color_dict.get('sem_info', None) is not None
+        assert color_dict.get('dataset', None) is not None
+
+        if color_dict['dataset'] == 'nuScenes':
+            sem_label = color_dict['sem_info']['sem_label']
+            label_mapping = color_dict['sem_info']['label_mapping']
+            converted_pts_sem_mask = label_mapping[sem_label]
+            
+
+
+        
+
+
+    else:
+        raise IndexError('Please check the index of color feature!')
 
     norm = mpl.colors.Normalize(vmin=min_value, vmax=max_value)
 

@@ -251,8 +251,23 @@ class ALWindow(QMainWindow):
                 raise TypeError('No data is load!')
             
     def show_sem(self):
-        pass
+        if self.dataset == 'nuScenes':
+            file_dict = self.data_list[self.index]
+            lidar_sem_label_path = file_dict['pts_semantic_mask_path']
+            lidar_sem_label_path = os.path.join(self.dataset_path,self.data_prefix['sem'],lidar_sem_label_path)
+            sem_label = load_points(pts_filename=lidar_sem_label_path)
+            
+            self.sem_info = self.cfg.NUSCENES_SEMANTIC_INFO
+            self.sem_info.update({
+                'sem_label': sem_label
+            })
+            # label_mapping = self.cfg.NUSCENES_SEMANTIC_INFO['label_mapping']
+            # self.converted_pts_sem_mask = label_mapping[sem_label]
+            self.color_feature = 7 # semantic mode
 
+        else:
+            raise ValueError('This dataset has no semantic information!')
+        
     def show_det(self):
         #########
         # boxes #
@@ -321,6 +336,13 @@ class ALWindow(QMainWindow):
             'min_value': self.min_value,
             'max_value': self.max_value
         })
+
+        if self.color_feature == 7:
+            color_dict.update({
+                'dataset' : self.dataset, 
+                'sem_info' : getattr(self, 'sem_info', None)
+            })
+        
         color_dict = get_colors(color_dict=color_dict)
         colors = color_dict['colors']
         self.success = color_dict['success']
@@ -331,12 +353,14 @@ class ALWindow(QMainWindow):
 
         self.viewer.addItem(mesh)
 
+        if file_dict.get('pts_semantic_mask_path', None) is not None:
+            self.show_sem_btn.setEnabled(True)
         if file_dict.get('instances', None) is not None:
             self.show_det_btn.setEnabled(True)
             self.always_show_ann.setEnabled(True)
-            
             if self.always_show_det_or_sem:
                 self.show_det()
+        
 
 
     def check_index_overflow(self) -> None:
@@ -406,7 +430,8 @@ class ALWindow(QMainWindow):
                             CAM_BACK='samples/CAM_BACK',
                             CAM_BACK_RIGHT='samples/CAM_BACK_RIGHT',
                             CAM_BACK_LEFT='samples/CAM_BACK_LEFT',
-                            sweeps='sweeps/LIDAR_TOP')
+                            sweeps='sweeps/LIDAR_TOP',
+                            sem='lidarseg/v1.0-trainval')
     
     def update_img_dict(self):
 
