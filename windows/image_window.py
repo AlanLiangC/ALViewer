@@ -189,6 +189,7 @@ class ImageWindow(QMainWindow):
         self.img_file_list = []
         self.img_name_list = []
         self.index = -1
+        self.image_label.setText("")
 
 
 
