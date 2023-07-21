@@ -14,7 +14,10 @@ from pyqtgraph.Qt import QtGui
 
 from mmdet3d.structures import Box3DMode
 
-
+MAX_LABEL = {
+    'nuScenes': 31,
+    'SemanticKITTI': 259
+}
 
 class AL_viewer(gl.GLViewWidget):
     
@@ -321,13 +324,17 @@ def update_pts_color(colors):
         
 
 def creat_sem_points(sem_dict):
-
+    dataset = sem_dict['dataset']
+    data_type = 'np.uint8' if dataset == 'nuScenes' else 'np.int32'
     lidar_sem_label_path = sem_dict['lidar_sem_label_path']
     sem_info = sem_dict['sem_info']
-    sem_label = load_points(pts_filename=lidar_sem_label_path, data_type='np.uint8')
-            
+    sem_label = load_points(pts_filename=lidar_sem_label_path, data_type=data_type)
+    if dataset == 'SemanticKITTI':
+        sem_label = sem_label.astype(np.int64)
+        sem_label = sem_label % 2**16
+
     label_mapping = sem_info['label_mapping']
-    seg_label_mapping = np.ones(len(label_mapping), dtype=np.int64)
+    seg_label_mapping = np.ones(MAX_LABEL[dataset] + 1, dtype=np.int64)
     for idx in label_mapping:
         seg_label_mapping[idx] = label_mapping[idx]
 

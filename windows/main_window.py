@@ -144,7 +144,7 @@ class ALMainWindow(QMainWindow):
         self.layout.addWidget(self.load_kitti_btn, 2, 3)
         self.load_nuscenes_btn.clicked.connect(self.load_nuscenes)
         self.layout.addWidget(self.load_nuscenes_btn, 2, 4)
-        self.load_semantic_kitti_btn.clicked.connect(self.load_nuscenes)
+        self.load_semantic_kitti_btn.clicked.connect(self.load_sementickitti)
         self.layout.addWidget(self.load_semantic_kitti_btn, 2, 5)
         self.choose_dir_btn.clicked.connect(self.show_directory_dialog)
         self.layout.addWidget(self.choose_dir_btn, 2, 1)
@@ -283,11 +283,10 @@ class ALMainWindow(QMainWindow):
                 raise TypeError('No data is load!')
             
     def show_sem(self):
+        self.viewer.removeItem(self.current_mesh)
+        self.color_slider.setEnabled(False)
         sem_dict = {}
         if self.dataset == 'nuScenes':
-            self.viewer.removeItem(self.current_mesh)
-            self.color_slider.setEnabled(False)
-            
             file_dict = self.data_list[self.index]
             lidar_sem_label_path = file_dict['pts_semantic_mask_path']
             lidar_sem_label_path = os.path.join(self.dataset_path,self.data_prefix['sem'],lidar_sem_label_path)
@@ -295,6 +294,16 @@ class ALMainWindow(QMainWindow):
                 'dataset': self.dataset, 
                 'lidar_sem_label_path': lidar_sem_label_path,
                 'sem_info': self.cfg.NUSCENES_SEMANTIC_INFO
+            })
+
+        elif self.dataset == 'SemanticKITTI':
+            file_dict = self.data_list[self.index]
+            lidar_sem_label_path = file_dict['pts_semantic_mask_path']
+            lidar_sem_label_path = os.path.join(self.dataset_path,self.data_prefix['sem'],lidar_sem_label_path)
+            sem_dict.update({
+                'dataset': self.dataset, 
+                'lidar_sem_label_path': lidar_sem_label_path,
+                'sem_info': self.cfg.SEMANTIC_KITTI_INFO
             })
         else:
             raise ValueError('This dataset has no semantic information!')
@@ -473,6 +482,19 @@ class ALMainWindow(QMainWindow):
                             CAM_BACK_LEFT='samples/CAM_BACK_LEFT',
                             sweeps='sweeps/LIDAR_TOP',
                             sem='lidarseg/v1.0-trainval')
+        
+    def set_semantickitti(self) -> None:
+        self.dataset = 'SemanticKITTI'
+        self.min_value = -1
+        self.max_value = -1
+        self.num_features = 4
+        self.load_dim = 4
+        self.extension = 'bin'
+        self.intensity_multiplier = 1
+        self.color_dict[6] = 'channel'
+        self.data_prefix = dict(
+                            pts='.',
+                            sem='.')
     
     def update_img_dict(self):
 
@@ -506,6 +528,15 @@ class ALMainWindow(QMainWindow):
         self.index = 0
         file_dict = self.data_list[self.index]
         self.set_nuscenes()
+        self.show_mmdet_dict(file_dict)
+
+    def load_sementickitti(self) -> None:
+        self.dataset_path = Path(self.cfg.SEMENTICKITTI)
+        nuscenes_pkl_path = self.dataset_path / 'semantickitti_infos_train.pkl'
+        self.data_list = get_data_list(data_pkl_path=nuscenes_pkl_path)
+        self.index = 0
+        file_dict = self.data_list[self.index]
+        self.set_semantickitti()
         self.show_mmdet_dict(file_dict)
 
 
