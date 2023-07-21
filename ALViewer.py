@@ -25,7 +25,9 @@ import multiprocessing as mp
 import pyqtgraph.opengl as gl
 import matplotlib.cm as cm
 import matplotlib as mpl
-from windows.common import (AL_viewer, get_data_list, load_points, get_colors, create_boxes, parse_ann_info)
+from windows.common import (AL_viewer, get_data_list, load_points, 
+                            get_colors, create_boxes, parse_ann_info,
+                            creat_sem_points)
 from windows.image_window import ImageWindow
 
 def parse_args():
@@ -51,7 +53,8 @@ class ALWindow(QMainWindow):
         host_name = socket.gethostname()
         assert host_name == 'Liang'
         self.monitor = QDesktopWidget().screenGeometry(0)
-        self.monitor.setHeight(self.monitor.height())
+        self.monitor.setHeight(int(self.monitor.height()*0.5))
+        self.monitor.setWidth(int(self.monitor.width()*0.5))
         self.setGeometry(self.monitor)
         self.setAcceptDrops(True)
         self.image_window = ImageWindow()
@@ -97,6 +100,7 @@ class ALWindow(QMainWindow):
         self.reset_btn = QPushButton("reset")
         self.load_kitti_btn = QPushButton("KITTI")
         self.load_nuscenes_btn = QPushButton("nuScenes")
+        self.load_semantic_kitti_btn = QPushButton("SemanticKITTI")
         self.choose_dir_btn = QPushButton("choose custom directory")
         self.show_sem_btn = QPushButton("show semantic")
         self.show_det_btn = QPushButton("show detection")
@@ -151,6 +155,8 @@ class ALWindow(QMainWindow):
         self.layout.addWidget(self.load_kitti_btn, 2, 3)
         self.load_nuscenes_btn.clicked.connect(self.load_nuscenes)
         self.layout.addWidget(self.load_nuscenes_btn, 2, 4)
+        self.load_semantic_kitti_btn.clicked.connect(self.load_nuscenes)
+        self.layout.addWidget(self.load_semantic_kitti_btn, 2, 5)
         self.choose_dir_btn.clicked.connect(self.show_directory_dialog)
         self.layout.addWidget(self.choose_dir_btn, 2, 1)
         self.prev_btn.clicked.connect(self.decrement_index)
@@ -169,8 +175,6 @@ class ALWindow(QMainWindow):
         self.layout.addWidget(self.color_slider, 3, 1)
         self.color_slider.valueChanged.connect(self.color_slider_change)
 
-
-
         self.current_row = 5
 
         self.num_info.setAlignment(Qt.AlignLeft)
@@ -184,18 +188,49 @@ class ALWindow(QMainWindow):
         self.layout.addWidget(self.file_name_label, 1, 1, 1, 1)
 
 
-
-
-    def reset(self) -> None:
+    def reset_control(self):
         self.show_det_btn.setEnabled(False)
         self.show_img_btn.setEnabled(False)
         self.show_sem_btn.setEnabled(False)
-
+        self.always_show_ann.setEnabled(False)
         self.file_name_label.setText("")
         self.num_info.setText("")
         self.log_info.setText("")
         self.reset_viewer()
+    
+    def reset_atts(self):
+        self.color_dict = self.cfg.color_dict
+        self.grid_dimensions = self.cfg.grid_dimensions
 
+        self.dataset = None
+        self.dataset_path = None
+        self.data_prefix = None
+        self.min_value = self.cfg.min_value
+        self.max_value = self.cfg.max_value
+        self.num_features = self.cfg.num_features
+        self.color_feature = self.cfg.color_feature
+        self.color_name = self.cfg.color_name
+        self.point_size = self.cfg.point_size
+        self.extension = self.cfg.extension
+        self.d_type = np.float32
+        self.intensity_multiplier = self.cfg.intensity_multiplier
+        self.file_name = None
+        self.file_list = None
+        self.data_list = None
+        self.lastDir = None
+        self.current_mesh = None
+        self.success = self.cfg.success
+        self.boxes = {}
+        self.img_dict = {}
+        self.index = -1
+        self.row_height = 20
+        self.always_show_det_or_sem = False
+
+
+    def reset(self) -> None:
+        self.reset_control()
+        self.reset_atts()
+        
     def reset_viewer(self) -> None:
 
         self.num_info.setText(f'sequence_size: {len(self.data_list)}')
@@ -251,22 +286,31 @@ class ALWindow(QMainWindow):
                 raise TypeError('No data is load!')
             
     def show_sem(self):
+        sem_dict = {}
         if self.dataset == 'nuScenes':
+            self.viewer.removeItem(self.current_mesh)
+            self.color_slider.setEnabled(False)
+            
             file_dict = self.data_list[self.index]
             lidar_sem_label_path = file_dict['pts_semantic_mask_path']
             lidar_sem_label_path = os.path.join(self.dataset_path,self.data_prefix['sem'],lidar_sem_label_path)
-            sem_label = load_points(pts_filename=lidar_sem_label_path)
-            
-            self.sem_info = self.cfg.NUSCENES_SEMANTIC_INFO
-            self.sem_info.update({
-                'sem_label': sem_label
+            sem_dict.update({
+                'dataset': self.dataset, 
+                'lidar_sem_label_path': lidar_sem_label_path,
+                'sem_info': self.cfg.NUSCENES_SEMANTIC_INFO
             })
-            # label_mapping = self.cfg.NUSCENES_SEMANTIC_INFO['label_mapping']
-            # self.converted_pts_sem_mask = label_mapping[sem_label]
-            self.color_feature = 7 # semantic mode
-
         else:
             raise ValueError('This dataset has no semantic information!')
+        
+        sem_dict = creat_sem_points(sem_dict = sem_dict)
+        sem_colors = sem_dict.get('sem_colors', None)
+        assert sem_colors is not None
+
+        mesh = gl.GLScatterPlotItem(pos=np.asarray(self.current_pc[:, 0:3]), size=self.point_size, color=sem_colors)
+        self.current_mesh = mesh
+
+        self.viewer.addItem(mesh)
+
         
     def show_det(self):
         #########
@@ -337,11 +381,11 @@ class ALWindow(QMainWindow):
             'max_value': self.max_value
         })
 
-        if self.color_feature == 7:
-            color_dict.update({
-                'dataset' : self.dataset, 
-                'sem_info' : getattr(self, 'sem_info', None)
-            })
+        # if self.color_feature == 7:
+        #     color_dict.update({
+        #         'dataset' : self.dataset, 
+        #         'sem_info' : getattr(self, 'sem_info', None)
+        #     })
         
         color_dict = get_colors(color_dict=color_dict)
         colors = color_dict['colors']
@@ -454,16 +498,18 @@ class ALWindow(QMainWindow):
         kitti_pkl_path = self.dataset_path / 'kitti_infos_train.pkl'
         self.data_list = get_data_list(data_pkl_path=kitti_pkl_path)
         self.index = 0
+        file_dict = self.data_list[self.index]
         self.set_kitti()
-        self.show_mmdet_dict(self.data_list[self.index])
+        self.show_mmdet_dict(file_dict)
 
     def load_nuscenes(self) -> None:
         self.dataset_path = Path(self.cfg.NUSCENES)
         nuscenes_pkl_path = self.dataset_path / 'nuscenes_infos_val.pkl'
         self.data_list = get_data_list(data_pkl_path=nuscenes_pkl_path)
         self.index = 0
+        file_dict = self.data_list[self.index]
         self.set_nuscenes()
-        self.show_mmdet_dict(self.data_list[self.index])
+        self.show_mmdet_dict(file_dict)
 
 
 def main():

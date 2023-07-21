@@ -68,7 +68,7 @@ def get_data_list(data_pkl_path):
     return data_list
 
 
-def load_points(pts_filename: str) -> np.ndarray:
+def load_points(pts_filename: str, data_type: str = 'np.float32') -> np.ndarray:
     """Private function to load point clouds data.
 
     Args:
@@ -77,15 +77,17 @@ def load_points(pts_filename: str) -> np.ndarray:
     Returns:
         np.ndarray: An array containing point clouds data.
     """
+
+    data_type = eval(data_type)
     try:
         pts_bytes = get(pts_filename)
-        points = np.frombuffer(pts_bytes, dtype=np.float32)
+        points = np.frombuffer(pts_bytes, dtype=data_type)
     except ConnectionError:
         mmengine.check_file_exist(pts_filename)
         if pts_filename.endswith('.npy'):
             points = np.load(pts_filename)
         else:
-            points = np.fromfile(pts_filename, dtype=np.float32)
+            points = np.fromfile(pts_filename, dtype=data_type)
     return points
 
 
@@ -152,20 +154,15 @@ def get_colors(color_dict: dict) -> dict:
         except IndexError:
             feature = pc[:, 3]
 
-    elif color_feature == 7: # semantic mode 
+    # elif color_feature == 7: # semantic mode 
 
-        assert color_dict.get('sem_info', None) is not None
-        assert color_dict.get('dataset', None) is not None
+    #     assert color_dict.get('sem_info', None) is not None
+    #     assert color_dict.get('dataset', None) is not None
 
-        if color_dict['dataset'] == 'nuScenes':
-            sem_label = color_dict['sem_info']['sem_label']
-            label_mapping = color_dict['sem_info']['label_mapping']
-            converted_pts_sem_mask = label_mapping[sem_label]
-            
-
-
-        
-
+    #     if color_dict['dataset'] == 'nuScenes':
+    #         sem_label = color_dict['sem_info']['sem_label']
+    #         label_mapping = color_dict['sem_info']['label_mapping']
+    #         converted_pts_sem_mask = label_mapping[sem_label]
 
     else:
         raise IndexError('Please check the index of color feature!')
@@ -309,3 +306,44 @@ def parse_ann_info(info: dict):
         ann_info['gt_bboxes_3d'] = np.hstack([ann_info['gt_bboxes_3d'], ann_info['gt_bboxes_labels'].reshape(-1,1)])
 
         return ann_info
+
+def update_pts_color(colors):
+    assert len(colors) > 0
+    for i in range(len(colors)):
+        single_color = colors[i]
+        if len(single_color) == 3: # rgb mode
+            if type(single_color) == tuple:
+                single_color = list(single_color)
+            single_color.append(255)
+        single_color = tuple(single_color)
+        colors[i] = single_color
+    return colors
+        
+
+def creat_sem_points(sem_dict):
+
+    lidar_sem_label_path = sem_dict['lidar_sem_label_path']
+    sem_info = sem_dict['sem_info']
+    sem_label = load_points(pts_filename=lidar_sem_label_path, data_type='np.uint8')
+            
+    label_mapping = sem_info['label_mapping']
+    seg_label_mapping = np.ones(len(label_mapping), dtype=np.int64)
+    for idx in label_mapping:
+        seg_label_mapping[idx] = label_mapping[idx]
+
+    converted_pts_sem_mask = seg_label_mapping[sem_label].astype(np.int64)
+    # COLORS = update_pts_color(sem_info['COLORS'])
+    # sem_colors = COLORS[converted_pts_sem_mask]
+    norm = mpl.colors.Normalize(vmin=np.min(seg_label_mapping), vmax=np.max(seg_label_mapping))
+    cmap = cm.jet  # sequential
+
+    m = cm.ScalarMappable(norm=norm, cmap=cmap)
+    sem_colors = m.to_rgba(converted_pts_sem_mask)
+    sem_colors[:, [2, 1, 0, 3]] = sem_colors[:, [0, 1, 2, 3]]
+    sem_colors[:, 3] = 0.5
+    sem_dict.update({
+        'sem_colors': sem_colors
+    })
+
+    return sem_dict
+    
