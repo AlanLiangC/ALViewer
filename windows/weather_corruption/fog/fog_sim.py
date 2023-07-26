@@ -1,8 +1,10 @@
+import numpy as np
 import os
 import copy
 import math
 import pickle
 import argparse
+import open3d
 
 import numpy as np
 import multiprocessing as mp
@@ -17,22 +19,6 @@ RNG = np.random.default_rng(seed=42)
 AVAILABLE_TAU_Hs = [20]
 LIDAR_FOLDERS = ['lidar_hdl64_strongest', 'lidar_hdl64_last']
 INTEGRAL_PATH = Path(os.path.dirname(os.path.realpath(__file__))) / 'integral_lookup_tables' / 'original'
-
-
-
-def parse_arguments():
-
-    parser = argparse.ArgumentParser(description='LiDAR foggification')
-
-    parser.add_argument('-c', '--n_cpus', help='number of CPUs that should be used', type=int, default=mp.cpu_count())
-    parser.add_argument('-f', '--n_features', help='number of point features', type=int, default=5)
-    parser.add_argument('-r', '--root_folder', help='root folder of dataset',
-                        default=str(Path.home() / 'datasets/DENSE/SeeingThroughFog'))
-
-    arguments = parser.parse_args()
-
-    return arguments
-
 
 def get_available_alphas() -> List[float]:
 
@@ -313,55 +299,3 @@ def simulate_fog(p: ParameterSet, pc: np.ndarray, noise: int, gain: bool = False
                                                                  noise_variant)
 
     return augmented_pc, simulated_fog_pc, info_dict
-
-
-if __name__ == '__main__':
-
-    args = parse_arguments()
-
-    print('')
-    print(f'using {args.n_cpus} CPUs')
-
-    available_alphas = get_available_alphas()
-
-    for lidar_folder in LIDAR_FOLDERS:
-
-        src_folder = os.path.join(args.root_folder, lidar_folder)
-
-        all_files = []
-
-        for root, dirs, files in os.walk(src_folder, followlinks=True):
-            assert (root == src_folder)
-            all_files = sorted(files)
-
-        all_paths = [os.path.join(src_folder, file) for file in all_files]
-
-        for available_alpha in available_alphas:
-
-            dst_folder = f'{src_folder}_CVL_beta_{available_alpha:.3f}'
-
-            Path(dst_folder).mkdir(parents=True, exist_ok=True)
-
-            print('')
-            print(f'alpha {available_alpha}')
-            print('')
-            print(f'searching for point clouds in    {src_folder}')
-            print(f'saving augmented point clouds to {dst_folder}')
-
-            parameter_set = ParameterSet(alpha=available_alpha, gamma=0.000001)
-
-            def _map(i: int) -> None:
-
-                points = np.fromfile(all_paths[i], dtype=np.float32)
-                points = points.reshape((-1, args.n_features))
-
-                points, _, _ = simulate_fog(parameter_set, points, 10)
-
-                lidar_save_path = os.path.join(dst_folder, all_files[i])
-                points.astype(np.float32).tofile(lidar_save_path)
-
-            n = len(all_files)
-
-            with mp.Pool(args.n_cpus) as pool:
-
-                l = list(tqdm(pool.imap(_map, range(n)), total=n))
