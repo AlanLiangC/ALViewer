@@ -8,3 +8,14 @@ def fog_sim(pointcloud,severity):
     parameter_set = ParameterSet(alpha=c, gamma=0.000001)
     points, _, _ = simulate_fog(parameter_set, pointcloud, noise=10)
     return points
+
+'''
+Rain
+'''
+
+def rain_sim(pointcloud,severity):
+    from tools.lidar_corruption.lisa import LISA
+    rain_sim = LISA(show_progressbar=True)
+    c = [0.20, 0.73, 1.5625, 3.125, 7.29, 10.42][severity-1]
+    points = rain_sim.augment(pointcloud, c)
+    return points

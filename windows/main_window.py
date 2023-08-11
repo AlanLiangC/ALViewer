@@ -381,6 +381,10 @@ class ALMainWindow(QMainWindow):
             from lidar_corruption import fog_sim
             pc = fog_sim(sim_pc, self.severity)
 
+        if self.add_rain:
+            from lidar_corruption import rain_sim
+            pc = rain_sim(sim_pc, self.severity)
+
         return pc
   
     def show_sem(self):

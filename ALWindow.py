@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtWidgets import QWidget
 
 from windows.main_window import ALMainWindow
+from windows.detection_window import ALDetWindow
 
 
 def parse_args():
@@ -40,6 +41,9 @@ class ALWindow(QMainWindow):
         self.setCentralWidget(self.centerWidget)
         self.layout = QGridLayout()
 
+        self.main_window = ALMainWindow(cfg=self.cfg)
+        self.det_window = ALDetWindow(self.main_window)
+
         self.image_label = QLabel()
         self.image_label.setAlignment(Qt.AlignCenter)
         self.main_window_btn = QPushButton("open main window")
@@ -64,12 +68,13 @@ class ALWindow(QMainWindow):
         self.sem_task_btn.clicked.connect(self.segmentation_task)
 
     def open_main_window(self):
-        self.main_window = ALMainWindow(cfg=self.cfg)
+        
         self.main_window.reset()
         self.main_window.show()
 
     def detection_task(self):
-        pass
+        
+        self.det_window.show()
 
     def segmentation_task(self):
         pass
