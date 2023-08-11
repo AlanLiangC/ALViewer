@@ -8,6 +8,7 @@ import socket
 from typing import Union
 import numpy as np
 from pathlib import Path
+import logging
 
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
@@ -22,6 +23,7 @@ from windows.common import (AL_viewer, get_data_list, load_points,
                             creat_sem_points)
 from windows.image_window import ImageWindow
 
+logging.basicConfig(format='%(message)s', level=logging.INFO)
 
 
 class Namespace:
@@ -77,6 +79,10 @@ class ALMainWindow(QMainWindow):
         self.index = -1
         self.row_height = 20
         self.always_show_det_or_sem = False
+        self.severity = 0
+        self.add_fog = False
+        self.add_rain = False
+        self.add_snow = False
 
         self.centerWidget = QWidget()
         self.setCentralWidget(self.centerWidget)
@@ -113,6 +119,16 @@ class ALMainWindow(QMainWindow):
         self.file_name_label = QLabel()
 
         self.always_show_ann = QCheckBox("continued anns")
+
+        # =====================Corr======================== #
+        self.corr_sim_title = QLabel("corr sim")
+        self.corr_sim_label = QLabel(str(self.severity))
+        self.corr_sim_slider = QSlider(Qt.Horizontal)
+
+        self.fog_sim = QCheckBox("fog_sim")
+        self.rain_sim = QCheckBox("rain_sim")
+        self.snow_sim = QCheckBox("snow_sim")
+        # =====================Corr======================== #
         
         self.init_window()
 
@@ -166,6 +182,29 @@ class ALMainWindow(QMainWindow):
 
         self.current_row = 5
 
+        self.corr_sim_title.setAlignment(Qt.AlignCenter)
+        self.layout.addWidget(self.corr_sim_title, self.current_row, 0)
+        self.corr_sim_label.setAlignment(Qt.AlignCenter)
+        self.layout.addWidget(self.corr_sim_label, self.current_row, 2)
+        self.corr_sim_slider.setMinimum(0)
+        self.corr_sim_slider.setMaximum(5)
+        self.corr_sim_slider.setValue(self.severity)
+        self.corr_sim_slider.setTickPosition(QSlider.TicksBelow)
+        self.corr_sim_slider.setTickInterval(1)
+        self.layout.addWidget(self.corr_sim_slider, self.current_row, 1)
+        self.corr_sim_slider.valueChanged.connect(self.corr_sim_slider_change)
+        self.fog_sim.setEnabled(False)
+        self.fog_sim.stateChanged.connect(self.change_sim_state)
+        self.layout.addWidget(self.fog_sim, self.current_row, 3)
+        self.rain_sim.setEnabled(False)
+        self.rain_sim.stateChanged.connect(self.change_sim_state)
+        self.layout.addWidget(self.rain_sim, self.current_row, 4)
+        self.snow_sim.setEnabled(False)
+        self.snow_sim.stateChanged.connect(self.change_sim_state)
+        self.layout.addWidget(self.snow_sim, self.current_row, 5)
+
+        self.current_row += 1
+
         self.num_info.setAlignment(Qt.AlignLeft)
         self.num_info.setMaximumSize(self.monitor.width(), self.row_height)
         self.layout.addWidget(self.num_info, self.current_row, 0)
@@ -175,6 +214,8 @@ class ALMainWindow(QMainWindow):
         self.file_name_label.setAlignment(Qt.AlignCenter)
         self.file_name_label.setMaximumSize(self.monitor.width(), 20)
         self.layout.addWidget(self.file_name_label, 1, 1, 1, 1)
+
+        
 
 
     def reset_control(self):
@@ -282,6 +323,66 @@ class ALMainWindow(QMainWindow):
             else:
                 raise TypeError('No data is load!')
             
+    def change_sim_state(self):
+
+        if self.fog_sim.isChecked():
+            self.add_fog = True
+            self.rain_sim.setEnabled(False)
+            self.snow_sim.setEnabled(False)
+
+        elif self.rain_sim.isChecked():
+            self.add_rain = True
+            self.fog_sim.setEnabled(False)
+            self.snow_sim.setEnabled(False)
+
+        elif self.snow_sim.isChecked():
+            self.add_snow = True
+            self.fog_sim.setEnabled(False)
+            self.rain_sim.setEnabled(False)
+
+        else:
+            self.add_fog = False
+            self.add_rain = False
+            self.add_snow = False
+            if self.success:
+                self.fog_sim.setEnabled(True)
+                self.rain_sim.setEnabled(True)
+                self.snow_sim.setEnabled(True)
+
+        if self.severity > 0:
+            if self.current_mesh:
+                if self.data_list is not None:
+                    self.show_mmdet_dict(self.data_list[self.index])
+                elif self.file_list is not None:
+                    self.show_pointcloud(self.file_list[self.index])
+                else:
+                    raise TypeError('No data is load!')
+                
+        logging.info(str(self.add_fog))
+        logging.info(str(self.add_rain))
+        logging.info(str(self.add_snow))
+                
+
+
+    def corr_sim_slider_change(self):
+
+        self.severity = self.corr_sim_slider.value()
+        self.corr_sim_label.setText(str(self.severity))
+  
+    def check_sim_state(self, pc):
+        
+        if self.severity  == 0:
+            return pc
+        
+        sim_pc = copy.deepcopy(pc)
+        sim_pc[:,3] = sim_pc[:,3]*self.intensity_multiplier
+        
+        if self.add_fog:
+            from lidar_corruption import fog_sim
+            pc = fog_sim(sim_pc, self.severity)
+
+        return pc
+  
     def show_sem(self):
         self.viewer.removeItem(self.current_mesh)
         self.color_slider.setEnabled(False)
@@ -353,6 +454,7 @@ class ALMainWindow(QMainWindow):
         pass
 
     def show_mmdet_dict(self, file_dict: dict) -> None:
+
         assert self.dataset_path is not None
         assert self.data_prefix is not None
 
@@ -360,7 +462,7 @@ class ALMainWindow(QMainWindow):
 
         if self.dataset in ['KITTI', 'nuScenes']:
             self.show_img_btn.setEnabled(True)
-        
+
         lidar_points_path = file_dict['lidar_points']['lidar_path']
         lidar_points_path = os.path.join(self.dataset_path,self.data_prefix['pts'],lidar_points_path)
         self.file_name_label.setText(str(Path(lidar_points_path).name))
@@ -377,7 +479,11 @@ class ALMainWindow(QMainWindow):
         ##########
         pc = load_points(lidar_points_path)
         pc = pc.reshape(-1, self.load_dim)
+        self.current_pc = copy.deepcopy(pc)
+
         self.log_string(pc)
+
+        pc = self.check_sim_state(pc)
 
         color_dict = {}
         color_dict.update({
@@ -387,19 +493,14 @@ class ALMainWindow(QMainWindow):
             'max_value': self.max_value
         })
 
-        # if self.color_feature == 7:
-        #     color_dict.update({
-        #         'dataset' : self.dataset, 
-        #         'sem_info' : getattr(self, 'sem_info', None)
-        #     })
-        
+
         color_dict = get_colors(color_dict=color_dict)
         colors = color_dict['colors']
         self.success = color_dict['success']
 
         mesh = gl.GLScatterPlotItem(pos=np.asarray(pc[:, 0:3]), size=self.point_size, color=colors)
         self.current_mesh = mesh
-        self.current_pc = copy.deepcopy(pc)
+        
 
         self.viewer.addItem(mesh)
 
@@ -462,6 +563,9 @@ class ALMainWindow(QMainWindow):
         self.color_dict[6] = 'not available'
         self.data_prefix=dict(pts='training/velodyne_reduced',
                               img='training/image_2')
+        self.fog_sim.setEnabled(True)
+        self.rain_sim.setEnabled(True)
+        self.snow_sim.setEnabled(True)
         
     def set_nuscenes(self) -> None:
         self.dataset = 'nuScenes'
@@ -482,6 +586,9 @@ class ALMainWindow(QMainWindow):
                             CAM_BACK_LEFT='samples/CAM_BACK_LEFT',
                             sweeps='sweeps/LIDAR_TOP',
                             sem='lidarseg/v1.0-trainval')
+        self.fog_sim.setEnabled(True)
+        self.rain_sim.setEnabled(True)
+        self.snow_sim.setEnabled(True)
         
     def set_semantickitti(self) -> None:
         self.dataset = 'SemanticKITTI'
