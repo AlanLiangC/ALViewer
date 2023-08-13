@@ -453,7 +453,10 @@ class ALMainWindow(QMainWindow):
         else:
             raise TypeError('Please check if at least one dataset was selected!')
 
-        
+    def clear_boxes(self):
+        if self.success:
+            self.show_mmdet_dict(self.data_list[self.index])
+
     def show_pointcloud(self, filename: Union[dict, str]) -> None:
         pass
 
@@ -469,6 +472,7 @@ class ALMainWindow(QMainWindow):
 
         lidar_points_path = file_dict['lidar_points']['lidar_path']
         lidar_points_path = os.path.join(self.dataset_path,self.data_prefix['pts'],lidar_points_path)
+        self.lidar_points_path = lidar_points_path
         self.file_name_label.setText(str(Path(lidar_points_path).name))
 
         if len(self.data_list) > 1:

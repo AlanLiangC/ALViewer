@@ -1,4 +1,6 @@
 import os
+import torch
+from typing import Union
 import pickle as pkl
 import mmengine
 from mmengine.fileio import get
@@ -12,7 +14,7 @@ from PyQt5.QtGui import *
 import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtGui
 
-from mmdet3d.structures import Box3DMode
+from mmdet3d.structures import Box3DMode, LiDARInstance3DBoxes
 
 MAX_LABEL = {
     'nuScenes': 31,
@@ -198,25 +200,32 @@ def limit_period(val: np.ndarray,
     return limited_val
 
 
-def create_boxes(bboxes_3d, COLORS, dataset):
+def create_boxes(bboxes_3d, COLORS, dataset, mode = 'show'):
     boxes = {}
     box_items = []
     l1_items = []
     l2_items = []
 
     if dataset == "KITTI":
-        bboxes_3d = Box3DMode.convert(bboxes_3d, Box3DMode.CAM,
-                                                    Box3DMode.LIDAR)
+        if mode == 'show':
+            bboxes_3d = Box3DMode.convert(bboxes_3d, Box3DMode.CAM,
+                                                        Box3DMode.LIDAR)
         bboxes_3d[:,2] += bboxes_3d[:,5] / 2
     elif dataset == 'nuScenes':
-        pass
+        if mode == 'inference':
+            bboxes_3d[:,2] += bboxes_3d[:,5] / 2
     else:
         raise TypeError('Not set dataset')
 
     # create annotation boxes
     for annotation in bboxes_3d:
 
-        x, y, z, w, l, h, rotation, category = annotation
+        if annotation.shape[0] == 7:
+            x, y, z, w, l, h, rotation, category = annotation
+        else:
+            x, y, z, w, l, h, rotation = annotation[:7]
+            category = annotation[-1]
+
         rotation = np.rad2deg(rotation) + 90
         try:
             color = COLORS[int(category) - 1]
@@ -353,4 +362,18 @@ def creat_sem_points(sem_dict):
     })
 
     return sem_dict
+
+
+def tensor2ndarray(value: Union[np.ndarray, torch.Tensor]) -> np.ndarray:
+    """If the type of value is torch.Tensor, convert the value to np.ndarray.
+
+    Args:
+        value (np.ndarray, torch.Tensor): value.
+
+    Returns:
+        Any: value.
+    """
+    if isinstance(value, torch.Tensor):
+        value = value.detach().cpu().numpy()
+    return value
     
