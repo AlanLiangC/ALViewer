@@ -17,7 +17,7 @@ def mmdet_inference(cfgs):
                     pred_instances_3d.scores_3d > cfgs['score_thr']].to('cpu')
 
     try:
-        bboxes_3d = pred_instances_3d.bboxes_3d.tensor.view(-1,7)  # LITTI
+        bboxes_3d = pred_instances_3d.bboxes_3d.tensor.view(-1,7)  # KITTI
     except:
         bboxes_3d = pred_instances_3d.bboxes_3d.tensor.view(-1,9)  # Nuscenes
     

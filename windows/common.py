@@ -220,7 +220,7 @@ def create_boxes(bboxes_3d, COLORS, dataset, mode = 'show'):
     # create annotation boxes
     for annotation in bboxes_3d:
 
-        if annotation.shape[0] == 7:
+        if annotation.shape[0] == 8:
             x, y, z, w, l, h, rotation, category = annotation
         else:
             x, y, z, w, l, h, rotation = annotation[:7]

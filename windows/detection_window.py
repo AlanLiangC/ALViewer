@@ -59,11 +59,13 @@ class ALDetWindow(QMainWindow):
         self.inference_btn = QPushButton("inference")
         self.clear_boxes_btn = QPushButton("clear anno")
 
+        self.use_window_points_box = QCheckBox("use window points")
+
         self.init_window()
         
     def init_window(self):
         self.centerWidget.setLayout(self.layout)
-        self.layout.addWidget(self.image_label, 0, 0, 1, 4)
+        self.layout.addWidget(self.image_label, 0, 0, 1, 3)
         self.width, self.height = self.image_label.width(), self.image_label.height()
         pixmap = QPixmap(str('pics/ALDetection.png'))
         pixmap = pixmap.scaled(self.width, self.height, Qt.KeepAspectRatio)
@@ -71,19 +73,21 @@ class ALDetWindow(QMainWindow):
 
         self.layout.addWidget(self.select_cfg_info, 1, 0)
         self.layout.addWidget(self.select_pretrained_model_info, 2, 0)
-        self.layout.addWidget(self.select_cfg_file, 1, 1, 1, 3)
-        self.layout.addWidget(self.select_pretrained_model, 2, 1, 1, 3)
+        self.layout.addWidget(self.select_cfg_file, 1, 1, 1, 2)
+        self.layout.addWidget(self.select_pretrained_model, 2, 1, 1, 2)
         self.init_det_files()
 
-        self.layout.addWidget(self.refresh_window_btn, 3, 0)
+        self.layout.addWidget(self.refresh_window_btn, 3, 0, 2, 1)
         self.refresh_window_btn.setStyleSheet("background-color: red;")
+        self.refresh_window_btn.setFixedSize(180, 60)
         self.refresh_window_btn.clicked.connect(self.defresh_window)
         self.layout.addWidget(self.show_gt_btn, 3, 1)
         self.show_gt_btn.clicked.connect(self.show_gt)
-        self.layout.addWidget(self.inference_btn, 3, 2)
+        self.layout.addWidget(self.inference_btn, 4, 2)
         self.inference_btn.clicked.connect(self.inference)
-        self.layout.addWidget(self.clear_boxes_btn, 3, 3)
+        self.layout.addWidget(self.clear_boxes_btn, 3, 2)
         self.clear_boxes_btn.clicked.connect(self.clear_boxes)
+        self.layout.addWidget(self.use_window_points_box, 4, 1)
         
 
     def init_det_files(self):
@@ -142,6 +146,10 @@ class ALDetWindow(QMainWindow):
                 'checkpoint': self.pretrained_model
             }
         )
+
+        if self.use_window_points_box.isChecked():
+            if hasattr(self.main_window, 'current_pc'):
+                self.det_task_config['pcd'] = self.main_window.current_pc
 
         bboxes_3d = mmdet_inference(cfgs=self.det_task_config)
 

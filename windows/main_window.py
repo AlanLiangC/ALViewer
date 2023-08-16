@@ -69,7 +69,7 @@ class ALMainWindow(QMainWindow):
         self.d_type = np.float32
         self.intensity_multiplier = cfg.intensity_multiplier
         self.file_name = None
-        self.file_list = None
+        self.single_lidar_path = None
         self.data_list = None
         self.lastDir = None
         self.current_mesh = None
@@ -245,11 +245,11 @@ class ALMainWindow(QMainWindow):
         self.d_type = np.float32
         self.intensity_multiplier = self.cfg.intensity_multiplier
         self.file_name = None
-        self.file_list = None
+        self.single_lidar_path = None
         self.data_list = None
         self.lastDir = None
         self.current_mesh = None
-        self.success = self.cfg.success
+        self.success = False
         self.boxes = {}
         self.img_dict = {}
         self.index = -1
@@ -267,7 +267,7 @@ class ALMainWindow(QMainWindow):
         
     def reset_viewer(self) -> None:
 
-        self.num_info.setText(f'sequence_size: {len(self.data_list)}')
+        self.num_info.setText(f'sequence_size: {0}')
         self.viewer.items = []
         self.viewer.addItem(self.grid)
 
@@ -277,7 +277,7 @@ class ALMainWindow(QMainWindow):
 
     def show_directory_dialog(self) -> None:
 
-        directory = Path(os.getenv("HOME")) / 'AlanLiang/Projects/3D_Perception/ALViewer'
+        directory = Path(os.getenv("HOME"))
 
         if self.lastDir:
             directory = self.lastDir
@@ -318,8 +318,8 @@ class ALMainWindow(QMainWindow):
 
             if self.data_list is not None:
                 self.show_mmdet_dict(self.data_list[self.index])
-            elif self.file_list is not None:
-                self.show_pointcloud(self.file_list[self.index])
+            elif self.single_lidar_path is not None:
+                self.show_pointcloud(self.single_lidar_path)
             else:
                 raise TypeError('No data is load!')
             
@@ -353,8 +353,8 @@ class ALMainWindow(QMainWindow):
             if self.current_mesh:
                 if self.data_list is not None:
                     self.show_mmdet_dict(self.data_list[self.index])
-                elif self.file_list is not None:
-                    self.show_pointcloud(self.file_list[self.index])
+                elif self.single_lidar_path is not None:
+                    self.show_pointcloud(self.single_lidar_path)
                 else:
                     raise TypeError('No data is load!')
                 
@@ -380,10 +380,14 @@ class ALMainWindow(QMainWindow):
         if self.add_fog:
             from lidar_corruption import fog_sim
             pc = fog_sim(sim_pc, self.severity)
+            pc[:,3] = pc[:,3] / self.intensity_multiplier
+            self.current_pc = pc
 
         if self.add_rain:
             from lidar_corruption import rain_sim
             pc = rain_sim(sim_pc, self.severity)
+            pc[:,3] = pc[:,3] / self.intensity_multiplier
+            self.current_pc = pc
 
         return pc
   
@@ -427,9 +431,19 @@ class ALMainWindow(QMainWindow):
         #########
         # boxes #
         #########
-        file_dict = self.data_list[self.index]
-        annotations = parse_ann_info(file_dict)
-        bboxes_3d = annotations['gt_bboxes_3d']
+        if getattr(self, 'data_list', None) is not None: 
+            file_dict = self.data_list[self.index]
+            annotations = parse_ann_info(file_dict)
+            bboxes_3d = annotations['gt_bboxes_3d']
+
+        elif getattr(self, 'single_bbox_file', None) is not None:
+            bboxes_3d = np.loadtxt(self.single_bbox_file)
+            if self.dataset == None:
+                raise TypeError('One lidar file should be select in window !')
+
+        else:
+            raise TypeError('No suppporting!')
+
         box_info = create_boxes(bboxes_3d=bboxes_3d, COLORS=self.cfg.COLORS, dataset=self.dataset)
 
         self.boxes = box_info['boxes']
@@ -458,7 +472,31 @@ class ALMainWindow(QMainWindow):
             self.show_mmdet_dict(self.data_list[self.index])
 
     def show_pointcloud(self, filename: Union[dict, str]) -> None:
-        pass
+        pc = load_points(filename)
+        if 'kitti' in filename:
+            self.set_kitti()
+        pc = pc.reshape(-1, self.load_dim)
+        self.current_pc = copy.deepcopy(pc)
+
+        self.log_string(pc)
+
+        color_dict = {}
+        color_dict.update({
+            'pc': pc,
+            'color_feature': self.color_feature,
+            'min_value': self.min_value,
+            'max_value': self.max_value
+        })
+
+
+        color_dict = get_colors(color_dict=color_dict)
+        colors = color_dict['colors']
+        self.success = color_dict['success']
+
+        mesh = gl.GLScatterPlotItem(pos=np.asarray(pc[:, 0:3]), size=self.point_size, color=colors)
+        self.current_mesh = mesh
+        self.viewer.addItem(mesh)
+        self.success = True
 
     def show_mmdet_dict(self, file_dict: dict) -> None:
 
@@ -538,8 +576,8 @@ class ALMainWindow(QMainWindow):
 
             if self.data_list is not None:
                 self.show_mmdet_dict(self.data_list[self.index])
-            elif self.file_list is not None:
-                self.show_pointcloud(self.file_list[self.index])
+            elif self.single_lidar_path is not None:
+                self.show_pointcloud(self.single_lidar_path)
             else:
                 raise TypeError('No data is load!')
 
@@ -553,8 +591,8 @@ class ALMainWindow(QMainWindow):
 
             if self.data_list is not None:
                 self.show_mmdet_dict(self.data_list[self.index])
-            elif self.file_list is not None:
-                self.show_pointcloud(self.file_list[self.index])
+            elif self.single_lidar_path is not None:
+                self.show_pointcloud(self.single_lidar_path)
             else:
                 raise TypeError('No data is load!')
 
@@ -629,7 +667,7 @@ class ALMainWindow(QMainWindow):
 
     def load_kitti(self) -> None:
         self.dataset_path = Path(self.cfg.KITTI)
-        kitti_pkl_path = self.dataset_path / 'kitti_infos_train.pkl'
+        kitti_pkl_path = self.dataset_path / 'kitti_infos_val.pkl'
         self.data_list = get_data_list(data_pkl_path=kitti_pkl_path)
         self.index = 0
         file_dict = self.data_list[self.index]
@@ -653,6 +691,43 @@ class ALMainWindow(QMainWindow):
         file_dict = self.data_list[self.index]
         self.set_semantickitti()
         self.show_mmdet_dict(file_dict)
+
+    def dragEnterEvent(self, e: QDragEnterEvent) -> None:
+
+        mimeData = e.mimeData()
+        mimeList = mimeData.formats()
+        filename = None
+
+        if "text/uri-list" in mimeList:
+            filename = mimeData.data("text/uri-list")
+            filename = str(filename, encoding="utf-8")
+            filename = filename.replace("file://", "").replace("\r\n", "").replace("%20", " ")
+            filename = Path(filename)
+
+        if filename.exists() and (filename.suffix == ".bin" or
+                                  filename.suffix == ".ply" or
+                                  filename.suffix == ".txt" or
+                                  filename.suffix == ".pickle"):
+            e.accept()
+            self.droppedFilename = str(filename)
+            self.extension = filename.suffix.replace('.', '')
+        else:
+            e.ignore()
+            self.droppedFilename = None
+
+
+    def dropEvent(self, e: QDropEvent) -> None:
+
+        if self.droppedFilename and self.extension == 'bin':
+            self.show_pointcloud(filename=self.droppedFilename)
+
+        elif self.droppedFilename and self.extension == 'txt':
+            self.single_bbox_file = self.droppedFilename
+            self.show_det()
+        else:
+            raise TypeError('Do not support this file!')
+
+
 
 
 # def main():
